@@ -3,17 +3,21 @@ import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Server extends Thread {
 
     private JFrame frame;
     private JTextArea textArea;
     private final ServerSocket serverSocket;
+    private final List<String> messages = new ArrayList<>();
 
     public Server() throws IOException {
         serverSocket = new ServerSocket(0);
@@ -27,7 +31,18 @@ public class Server extends Thread {
                 Socket server = serverSocket.accept();
                 DataInputStream in = new DataInputStream(server.getInputStream());
                 String message = in.readUTF();
-                log(message);
+                if (message.startsWith("/update ")) {
+                    String lastMessage = message.substring(8);
+                    int startIndex = messages.indexOf(lastMessage) + 1;
+                    DataOutputStream out = new DataOutputStream(server.getOutputStream());
+                    out.writeUTF(String.valueOf(messages.size() - startIndex));
+                    for (int i = startIndex; i < messages.size(); i++) {
+                        out.writeUTF(messages.get(i));
+                    }
+                } else {
+                    log(message);
+                    messages.add(message);
+                }
                 server.close();
             } catch (SocketTimeoutException e) {
                 System.out.println("Socket timed out");

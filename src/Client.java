@@ -2,16 +2,23 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
-import java.io.*;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.net.Socket;
+import java.util.Timer;
+import java.util.TimerTask;
 
 public class Client {
 
+    private static final int READ_CYCLE_PERIOD = 500;
+
     private static JTextArea textArea;
     private static JTextField textField;
-    private static int port;
-    private static String address;
-    private static String clientName = "Contrabass26";
+    private static int port = 0;
+    private static String address = "";
+    private static String clientName = System.getProperty("user.name");
+    private static String lastMessage = "";
 
     public static void main(String[] args) {
         createWindow();
@@ -33,6 +40,21 @@ public class Client {
         frame.add(textField, BorderLayout.PAGE_END);
         // Finalise
         frame.setVisible(true);
+        // Start read clock
+        new Thread(() -> {
+            Timer timer = new Timer();
+            TimerTask task = new TimerTask() {
+                @Override
+                public void run() {
+                    try {
+                        read();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            };
+            timer.scheduleAtFixedRate(task, 0, READ_CYCLE_PERIOD);
+        }).start();
     }
 
     private static void run(String text) throws IOException {
@@ -55,9 +77,27 @@ public class Client {
         } else {
             Socket client = new Socket(address, port);
             DataOutputStream out = new DataOutputStream(client.getOutputStream());
-            out.writeUTF(String.format("[%s] %s", clientName, text));
+            String toWrite = String.format("[%s] %s", clientName, text);
+            out.writeUTF(toWrite);
             client.close();
-            writeText(text);
+            writeText(toWrite);
+        }
+    }
+
+    private static void read() throws IOException {
+        if (!(address.equals("") || port == 0)) {
+            Socket client = new Socket(address, port);
+            DataOutputStream out = new DataOutputStream(client.getOutputStream());
+            out.writeUTF("/update " + lastMessage);
+            DataInputStream in = new DataInputStream(client.getInputStream());
+            int max = Integer.parseInt(in.readUTF());
+            for (int i = 0; i < max; i++) {
+                String message = in.readUTF();
+                if (!message.startsWith("[" + clientName)) {
+                writeText(message);
+                }
+                lastMessage = message;
+            }
         }
     }
 
